@@ -56,6 +56,14 @@ task-cli list in-progress
 
 # Installation and running
 
+Clone the repository and run the following command:
+
+```
+git clone https://github.com/leedinh/roadmap-proj.git
+cd roadmap-proj/task-cli
+
+```
+
 Please note that the `task-cli` in [Rust](https://rustup.rs/). To build and run the `task-cli` project, you can use the following commands:
 
 ```
