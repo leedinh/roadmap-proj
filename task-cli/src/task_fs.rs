@@ -1,16 +1,14 @@
 use std::{
     fmt::{self, Display, Formatter},
+    fs::File,
+    io::{Read, Write},
     ops::Deref,
     str::FromStr,
 };
 
 use anyhow::Result;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::{
-    fs::File,
-    io::{AsyncReadExt, AsyncWriteExt},
-};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Status {
@@ -47,8 +45,8 @@ pub struct Task {
     pub id: u64,
     pub description: String,
     pub status: Status,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 impl Display for Task {
@@ -63,24 +61,23 @@ impl Display for Task {
 
 impl Task {
     pub fn new(description: String) -> Self {
-        let now = Utc::now().to_rfc2822();
         Self {
             id: 0,
             description,
             status: Status::Todo,
-            created_at: now.clone(),
-            updated_at: now,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
         }
     }
 
     pub fn update_status(&mut self, status: Status) {
         self.status = status;
-        self.updated_at = Utc::now().to_rfc2822();
+        self.updated_at = Utc::now().naive_utc();
     }
 
     pub fn update_description(&mut self, description: String) {
         self.description = description;
-        self.updated_at = Utc::now().to_rfc2822();
+        self.updated_at = Utc::now().naive_utc();
     }
 }
 
@@ -107,35 +104,32 @@ impl Display for TaskList {
 }
 
 impl TaskList {
-    pub async fn load() -> Result<Self> {
-        let mut file = match File::open("tasks.json").await {
+    pub fn load() -> Result<Self> {
+        let mut file = match File::open("tasks.json") {
             Ok(file) => file,
             Err(_) => {
-                File::create("tasks.json")
-                    .await
-                    .expect("Failed to create tasks.json");
-                File::open("tasks.json")
-                    .await
-                    .expect("Failed to open tasks.json")
+                File::create("tasks.json").expect("Failed to create tasks.json");
+                File::open("tasks.json").expect("Failed to open tasks.json")
             }
         };
 
         let mut contents = String::new();
-        file.read_to_string(&mut contents).await?;
+        file.read_to_string(&mut contents)?;
 
         let tasks = serde_json::from_str(&contents).unwrap_or_default();
         Ok(Self(tasks))
     }
 
-    pub async fn save(&self) -> Result<()> {
-        let mut file = File::create("tasks.json").await?;
+    pub fn save(&self) -> Result<()> {
+        let mut file = File::create("tasks.json")?;
         let tasks = serde_json::to_string(&self)?;
-        file.write_all(tasks.as_bytes()).await?;
+        file.write_all(tasks.as_bytes())?;
         Ok(())
     }
 
     pub fn add_task(&mut self, task: Task) {
         self.0.push(task);
+        self.update_task_id();
     }
 
     pub fn get_task_by_id(&mut self, id: u64) -> Option<&mut Task> {
@@ -162,5 +156,46 @@ impl TaskList {
         }
 
         println!("{}", self);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_task_new() {
+        let task = Task::new("description".to_string());
+        assert_eq!(task.description, "description");
+        assert_eq!(task.status, Status::Todo);
+    }
+
+    #[test]
+    fn test_task_update_status() {
+        let mut task = Task::new("description".to_string());
+        task.update_status(Status::InProgress);
+        assert_eq!(task.status, Status::InProgress);
+    }
+
+    #[test]
+    fn test_task_update_description() {
+        let mut task = Task::new("description".to_string());
+        task.update_description("new description".to_string());
+        assert_eq!(task.description, "new description");
+    }
+
+    #[test]
+    fn test_task_list_save() {
+        let mut tasks = TaskList::load().unwrap();
+        tasks.add_task(Task::new("description".to_string()));
+        tasks.save().unwrap();
+    }
+
+    #[test]
+    fn test_task_list_get_task_by_id() {
+        let mut tasks = TaskList::load().unwrap();
+        tasks.add_task(Task::new("description".to_string()));
+        let task = tasks.get_task_by_id(1).unwrap();
+        assert_eq!(task.id, 1);
     }
 }

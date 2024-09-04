@@ -2,9 +2,8 @@ use task_fs::Status;
 
 mod task_fs;
 
-#[tokio::main]
-async fn main() {
-    let mut tasks = task_fs::TaskList::load().await.unwrap();
+fn main() {
+    let mut tasks = task_fs::TaskList::load().expect("failed to load tasks");
 
     let arg = std::env::args().nth(1);
 
@@ -62,5 +61,5 @@ async fn main() {
         }
     }
 
-    tasks.save().await.unwrap();
+    tasks.save().expect("failed to save tasks");
 }
